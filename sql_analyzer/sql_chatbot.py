@@ -138,22 +138,33 @@ Generate a SQL query to answer this question: {question}
 
 Rules:
 1. Return ONLY the SQL query, no explanations
-2. Use proper MS SQL Server syntax
+2. Use proper MS SQL Server syntax:
+   - Use TOP instead of LIMIT
+   - Use GETDATE() instead of NOW()
+   - Use DATEADD/DATEDIFF for date math
 3. Use proper case for SQL keywords (SELECT, FROM, etc.)
 4. Use EXACT column names as shown in the schema (e.g., use 'CompanyId', not 'company_id')
 5. Do not use backticks (`) around names
 6. The query should be complete and runnable
 
-Example output:
+Example outputs:
 SELECT COUNT(*) FROM Prj_Data_Transfers_SC WHERE CompanyId = 1
+
+SELECT TOP 1 * FROM Prj_Data_Transfers_SC 
+WHERE Recibido = 'Y' 
+ORDER BY Fecha_Recibo DESC
 """
         return self.llm.invoke(prompt).strip()
 
     def execute_query(self, sql: str) -> List[Tuple]:
-        """Execute the SQL and return results."""
-        with self.engine.connect() as conn:
-            result = conn.execute(text(sql))
-            return result.fetchall()
+        """Execute a SQL query and return the results."""
+        try:
+            # Create a new connection for each query
+            with self.engine.connect() as conn:
+                result = conn.execute(text(sql))
+                return result.fetchall()
+        except Exception as e:
+            raise Exception(f"Error executing query: {str(e)}")
 
     def format_response(self, question: str, result: List[Tuple], sql: str) -> str:
         """Format the result in natural language."""

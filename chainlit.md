@@ -1,14 +1,14 @@
-# Welcome to SQL Analyst! 🚀🤖
+# Welcome to SQL Chatbot! 🤖
 
-Hi there, Analyst! 👋 
-
-The SQL Analyst is connected to a Snowflake TPCDS_SF10TCL demo database. You can use this chat tool to analyze it.
+I can help you query your SQL Server database using natural language questions.
 
 
 
-## Sample queries
+## Example Questions
 
-- Which are the names of the tables in this database?
-- How many records are there in the PostNL_account_delivery_facts_anonymized table?
-- Which month_id has the highest amount of parcels and what is that amount?
-- What is the highest amount of parcels_home_1st?
+- "How many transfers are there for company 1?"
+- "Show me the most recent dispatched transfer"
+- "Count how many transfers were received last month"
+- "What's the average time between dispatch and receipt?"
+
+I'll show you the SQL query I plan to run and then give you the results!

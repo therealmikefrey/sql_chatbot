@@ -1,5 +1,6 @@
 from langchain_community.utilities.sql_database import SQLDatabase
-from sqlalchemy import create_engine, URL, text
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import SingletonThreadPool
 
 from sql_analyzer.config import MSSQL, MYSQL, cfg
 from sql_analyzer.log_init import logger
@@ -8,20 +9,27 @@ from sql_analyzer.log_init import logger
 def sql_db_factory() -> SQLDatabase:
     if cfg.selected_db == MSSQL:
         mssql_config = cfg.mssql_config
-        connection_url = URL.create(
-            "mssql+pyodbc",
-            username=mssql_config.user,
-            password=mssql_config.password,
-            host=mssql_config.server,
-            database=mssql_config.database,
-            query={
-                "driver": mssql_config.driver,
-                "TrustServerCertificate": "yes",
-            },
-        )
-        engine = create_engine(connection_url)
         
-        # Create SQLDatabase instance with engine directly
+        # Create connection string for pyodbc
+        conn_str = (
+            "DRIVER={" + mssql_config.driver + "};"
+            "SERVER=" + mssql_config.server + ";"
+            "DATABASE=" + mssql_config.database + ";"
+            "UID=" + mssql_config.user + ";"
+            "PWD=" + mssql_config.password + ";"
+            "TrustServerCertificate=yes;"
+        )
+        
+        # Create engine with singleton pool
+        engine = create_engine(
+            f"mssql+pyodbc:///?odbc_connect={conn_str}",
+            poolclass=SingletonThreadPool,  # Use a single connection
+            connect_args={
+                "autocommit": True
+            }
+        )
+        
+        # Create SQLDatabase instance
         sql_db = SQLDatabase(
             engine=engine,
             schema="dbo",  # Default schema for MSSQL
