@@ -1,5 +1,5 @@
 from langchain_community.utilities.sql_database import SQLDatabase
-from sqlalchemy import create_engine, URL
+from sqlalchemy import create_engine, URL, text
 
 from sql_analyzer.config import MSSQL, MYSQL, cfg
 from sql_analyzer.log_init import logger
@@ -20,7 +20,19 @@ def sql_db_factory() -> SQLDatabase:
             },
         )
         engine = create_engine(connection_url)
-        return SQLDatabase(engine=engine)
+        
+        # Create SQLDatabase instance with engine directly
+        sql_db = SQLDatabase(
+            engine=engine,
+            schema="dbo",  # Default schema for MSSQL
+            sample_rows_in_table_info=3
+        )
+        
+        # Test the connection and log table names
+        tables = sql_db.get_usable_table_names()
+        logger.info("Available tables: %s", tables)
+        
+        return sql_db
     elif cfg.selected_db == MYSQL:
         return SQLDatabase.from_uri(cfg.db_uri, view_support=True)
     else:
