@@ -1,28 +1,26 @@
-from langchain.sql_database import SQLDatabase
-from snowflake.sqlalchemy import URL
-from sqlalchemy import create_engine
+from langchain_community.utilities.sql_database import SQLDatabase
+from sqlalchemy import create_engine, URL
 
-from sql_analyzer.config import SNOWFLAKE, MYSQL, cfg
-
-from log_init import logger
+from sql_analyzer.config import MSSQL, MYSQL, cfg
+from sql_analyzer.log_init import logger
 
 
 def sql_db_factory() -> SQLDatabase:
-    if cfg.selected_db == SNOWFLAKE:
-        snowflake_config = cfg.snow_flake_config
-        schema = snowflake_config.snowflake_schema
-        engine = create_engine(
-            URL(
-                account=snowflake_config.snowflake_account,
-                user=snowflake_config.snowflake_user,
-                password=snowflake_config.snowflake_password,
-                database=snowflake_config.snowflake_database,
-                schema=schema,
-                warehouse=snowflake_config.snowflake_warehouse,
-                host=snowflake_config.snowflake_host,
-            )
+    if cfg.selected_db == MSSQL:
+        mssql_config = cfg.mssql_config
+        connection_url = URL.create(
+            "mssql+pyodbc",
+            username=mssql_config.user,
+            password=mssql_config.password,
+            host=mssql_config.server,
+            database=mssql_config.database,
+            query={
+                "driver": mssql_config.driver,
+                "TrustServerCertificate": "yes",
+            },
         )
-        return SQLDatabase(engine=engine, schema=schema)
+        engine = create_engine(connection_url)
+        return SQLDatabase(engine=engine)
     elif cfg.selected_db == MYSQL:
         return SQLDatabase.from_uri(cfg.db_uri, view_support=True)
     else:

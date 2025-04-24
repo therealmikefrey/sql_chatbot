@@ -1,0 +1,11 @@
+langchain==0.1.12
+langchain-core==0.1.32
+langchain-community==0.0.28
+langsmith==0.1.29
+packaging==23.2
+prompt-toolkit==3.0.41
+python-dotenv==1.0.1
+chainlit==0.7.700  # Using older version to avoid packaging conflict
+GeoAlchemy2==0.14.1
+pyodbc==5.0.1
+sqlalchemy==2.0.27

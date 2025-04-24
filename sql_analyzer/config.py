@@ -1,7 +1,5 @@
 import os
 
-from langchain.chat_models import ChatOpenAI
-
 from dotenv import load_dotenv
 from sql_analyzer.log_init import logger
 
@@ -10,25 +8,26 @@ load_dotenv()
 
 SNOWFLAKE = "snowflake"
 MYSQL = "mysql"
-SELECTED_DBS = [SNOWFLAKE, MYSQL]
+MSSQL = "mssql"
+SELECTED_DBS = [MSSQL, MYSQL]
 
 
-class SnowflakeConfig:
-    snowflake_account = os.getenv("SNOWFLAKE_ACCOUNT")
-    snowflake_user = os.getenv("SNOWFLAKE_USER")
-    snowflake_password = os.getenv("SNOWFLAKE_PASSWORD")
-    snowflake_database = os.getenv("SNOWFLAKE_DATABASE")
-    snowflake_schema = os.getenv("SNOWFLAKE_SCHEMA")
-    snowflake_warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
-    snowflake_host = os.getenv("SNOWFLAKE_HOST")
+class MSSQLConfig:
+    server = os.getenv("MSSQL_SERVER")
+    database = os.getenv("MSSQL_DATABASE")
+    user = os.getenv("MSSQL_USER")
+    password = os.getenv("MSSQL_PASSWORD")
+    driver = os.getenv("MSSQL_DRIVER", "ODBC Driver 17 for SQL Server")
 
 
 class Config:
-    model = "gpt-3.5-turbo-16k-0613"
-    # model = 'gpt-4-0613'
-    llm = ChatOpenAI(model=model, temperature=0)
+    # Ollama Configuration
+    ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    ollama_model = os.getenv("OLLAMA_MODEL", "codellama:13b")
+
+    # Database Configuration
     db_uri = os.getenv("DB_CONNECTION_STRING")
-    snow_flake_config = SnowflakeConfig()
+    mssql_config = MSSQLConfig()
     selected_db = os.getenv("SELECTED_DB")
     if selected_db not in SELECTED_DBS:
         raise Exception(
@@ -39,6 +38,7 @@ class Config:
 cfg = Config()
 
 if __name__ == "__main__":
-    logger.info("LLM %s", cfg.llm)
-    logger.info("db_uri %s", cfg.db_uri)
-    logger.info("selected_db %s", cfg.selected_db)
+    logger.info("Ollama URL: %s", cfg.ollama_url)
+    logger.info("Ollama Model: %s", cfg.ollama_model)
+    logger.info("db_uri: %s", cfg.db_uri)
+    logger.info("selected_db: %s", cfg.selected_db)

@@ -10,12 +10,11 @@ packages = [{include = "sql_analyzer"}]
 python = "^3.11"
 langchain = "^0.0.247"
 prompt-toolkit = "^3.0.39"
-openai = "^0.27.8"
 python-dotenv = "^1.0.0"
-# mysqlclient = "^2.2.0"
 chainlit = "^0.6.1"
 GeoAlchemy2 = "^0.14.1"
-snowflake-sqlalchemy = "1.4.7"
+pyodbc = "^5.0.1"
+sqlalchemy = "^2.0.27"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.7.0"

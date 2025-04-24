@@ -1,16 +1,13 @@
-from langchain.sql_database import SQLDatabase
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain.agents import create_sql_agent
-from langchain.agents import AgentExecutor
-from langchain.agents.agent_types import AgentType
-from typing import Tuple, Dict
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts.chat import MessagesPlaceholder
+from typing import List, Tuple, Any, Union
+from langchain_community.utilities.sql_database import SQLDatabase
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent
+from langchain.schema import AgentAction, AgentFinish
+from langchain.prompts import StringPromptTemplate
+from langchain_community.llms import Ollama
+from langchain.chains.llm import LLMChain
 from langchain.agents.agent import AgentOutputParser
-from langchain.schema import AgentAction, AgentFinish, OutputParserException
-from langchain.agents.mrkl.prompt import FORMAT_INSTRUCTIONS
-
-from typing import Union
+from langchain.tools.base import BaseTool
 import re
 
 from sql_analyzer.config import cfg
@@ -18,109 +15,144 @@ from sql_analyzer.log_init import logger
 from sql_analyzer.sql.sql_tool import ExtendedSQLDatabaseToolkit
 from sql_analyzer.sql_db_factory import sql_db_factory
 
-FINAL_ANSWER_ACTION = "Final Answer:"
+
+template = """You are a helpful SQL assistant that helps users understand their database.
+You have access to the following tools:
+
+{tools}
+
+You MUST follow this EXACT format with NO DEVIATIONS:
+
+Question: <the input question>
+Thought: <your reasoning>
+Action: <one of: sql_db_query, sql_db_schema, sql_db_list_tables>
+Action Input: <your input to the action>
+Observation: <the result>
+Thought: I now know the final answer
+Final Answer: <your answer>
+
+Rules:
+1. After checking schema, use sql_db_query (not sql_count) to count records
+2. For sql_db_query, Action Input must be a complete SQL query
+3. Put ALL explanations in the Final Answer section
+4. The schema output shows only SAMPLE rows - to get accurate counts you must run sql_db_query
+5. Always trust the results of sql_db_query over any sample data
+6. NO markdown formatting (```) in the Action Input
+7. NO explanations between steps - put them all in Final Answer
+8. For sql_db_schema, do not put quotes around table names
+9. After confirming a table exists with sql_db_list_tables, use sql_db_schema to check its structure
+10. NEVER put quotes around SQL queries in Action Input - write them directly
+11. After getting a successful query result, ALWAYS proceed to Final Answer
+
+Example:
+Question: How many users are active?
+Thought: I need to count active users
+Action: sql_db_query
+Action Input: SELECT COUNT(*) FROM users WHERE active = 1
+Observation: [(42,)]
+Thought: I now know the final answer
+Final Answer: There are 42 active users in the system.
+
+Question: {input}
+{agent_scratchpad}"""
 
 
-class ExtendedMRKLOutputParser(AgentOutputParser):
-    def get_format_instructions(self) -> str:
-        return FORMAT_INSTRUCTIONS
-
-    def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
-        includes_answer = self.includes_final_answer(text)
-        regex = (
-            r"Action\s*\d*\s*:[\s]*(.*?)[\s]*Action\s*\d*\s*Input\s*\d*\s*:[\s]*(.*)"
-        )
-        action_match = re.search(regex, text, re.DOTALL)
-        if action_match:
-            if includes_answer:
-                raise OutputParserException(
-                    "Parsing LLM output produced both a final answer "
-                    f"and a parse-able action: {text}"
-                )
-            action = action_match.group(1).strip()
-            action_input = action_match.group(2)
-            tool_input = action_input.strip(" ")
-            # ensure if its a well formed SQL query we don't remove any trailing " chars
-            if tool_input.startswith("SELECT ") is False:
-                tool_input = tool_input.strip('"')
-
-            return AgentAction(action, tool_input, text)
-
-        elif includes_answer:
-            return AgentFinish(
-                {"output": text.split(FINAL_ANSWER_ACTION)[-1].strip()}, text
-            )
-
-        if not re.search(r"Action\s*\d*\s*:[\s]*(.*?)", text, re.DOTALL):
-            raise OutputParserException(
-                f"Could not parse LLM output: `{text}`",
-                observation="Invalid Format: Missing 'Action:' after 'Thought:'",
-                llm_output=text,
-                send_to_llm=True,
-            )
-        elif not re.search(
-            r"[\s]*Action\s*\d*\s*Input\s*\d*\s*:[\s]*(.*)", text, re.DOTALL
-        ):
-            raise OutputParserException(
-                f"Could not parse LLM output: `{text}`",
-                observation="Invalid Format:"
-                " Missing 'Action Input:' after 'Action:'",
-                llm_output=text,
-                send_to_llm=True,
-            )
-        else:
-            raise OutputParserException(f"Could not parse LLM output: `{text}`")
-
-    def includes_final_answer(self, text):
-        includes_answer = (
-            FINAL_ANSWER_ACTION in text or FINAL_ANSWER_ACTION.lower() in text.lower()
-        )
-        return includes_answer
-
+class CustomPromptTemplate(StringPromptTemplate):
+    template: str
+    tools: List[BaseTool]
+    
     @property
-    def _type(self) -> str:
-        return "mrkl"
+    def _tools_names(self) -> List[str]:
+        return [tool.name for tool in self.tools]
+    
+    @property
+    def _tools_descriptions(self) -> str:
+        return "\n".join([f"{tool.name}: {tool.description}" for tool in self.tools])
+
+    def format(self, **kwargs) -> str:
+        intermediate_steps = kwargs.pop("intermediate_steps")
+        thoughts = ""
+        for action, observation in intermediate_steps:
+            thoughts += action.log
+            thoughts += f"\nObservation: {observation}\n"
+        kwargs["agent_scratchpad"] = thoughts
+        kwargs["tools"] = self._tools_descriptions
+        kwargs["tool_names"] = ", ".join(self._tools_names)
+        return self.template.format(**kwargs)
 
 
-def setup_memory() -> Tuple[Dict, ConversationBufferMemory]:
-    """
-    Sets up memory for the open ai functions agent.
-    :return a tuple with the agent keyword pairs and the conversation memory.
-    """
-    agent_kwargs = {
-        "extra_prompt_messages": [MessagesPlaceholder(variable_name="memory")],
-    }
-    memory = ConversationBufferMemory(memory_key="memory", return_messages=True)
+class CustomOutputParser(AgentOutputParser):
+    def parse(self, llm_output: str) -> Union[AgentAction, AgentFinish]:
+        if "Final Answer:" in llm_output:
+            return AgentFinish(
+                return_values={"output": llm_output.split("Final Answer:")[-1].strip()},
+                log=llm_output,
+            )
 
-    return agent_kwargs, memory
+        # Look for action and action input with more flexible regex
+        regex = r"Action:\s*([^\n]*?)\s*[\n]*Action Input:\s*(.*?)(?=\n*(?:Observation|$))"
+        match = re.search(regex, llm_output, re.DOTALL)
+        
+        if not match:
+            raise ValueError(f"Could not parse LLM output: `{llm_output}`")
+        
+        action = match.group(1).strip()
+        action_input = match.group(2).strip()
+        
+        # Remove any markdown code formatting and quotes
+        action_input = action_input.strip('`').strip('"\'').strip()
+        if action_input.startswith('sql\n'):
+            action_input = action_input[4:]
+        
+        return AgentAction(tool=action, tool_input=action_input, log=llm_output)
 
 
 def init_sql_db_toolkit() -> SQLDatabaseToolkit:
     db: SQLDatabase = sql_db_factory()
-    toolkit = ExtendedSQLDatabaseToolkit(db=db, llm=cfg.llm)
+    llm = Ollama(base_url=cfg.ollama_url, model=cfg.ollama_model)
+    toolkit = ExtendedSQLDatabaseToolkit(db=db, llm=llm)
     return toolkit
 
 
 def initialize_agent(toolkit: SQLDatabaseToolkit) -> AgentExecutor:
-    agent_executor = create_sql_agent(
-        llm=cfg.llm,
-        toolkit=toolkit,
-        verbose=True,
-        agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        memory=setup_memory(),
+    llm = Ollama(base_url=cfg.ollama_url, model=cfg.ollama_model)
+    tools = toolkit.get_tools()
+    
+    prompt = CustomPromptTemplate(
+        template=template,
+        tools=tools,
+        input_variables=["input", "intermediate_steps"]
     )
-    return agent_executor
+    
+    output_parser = CustomOutputParser()
+    
+    llm_chain = LLMChain(llm=llm, prompt=prompt)
+    
+    agent = LLMSingleActionAgent(
+        llm_chain=llm_chain,
+        output_parser=output_parser,
+        stop=["\nObservation:"],
+        allowed_tools=[tool.name for tool in tools],
+    )
+    
+    return AgentExecutor.from_agent_and_tools(
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        max_iterations=5,
+        handle_parsing_errors=True,
+    )
 
 
 def agent_factory() -> AgentExecutor:
     sql_db_toolkit = init_sql_db_toolkit()
     agent_executor = initialize_agent(sql_db_toolkit)
-    agent = agent_executor.agent
-    agent.output_parser = ExtendedMRKLOutputParser()
     return agent_executor
 
 
 if __name__ == "__main__":
     agent_executor = agent_factory()
-    result = agent_executor.run("Describe all tables")
-    logger.info("Result: %s", logger)
+    query = "How many records in the Prj_Data_Transfers_SC table are marked as 'Y' for Recibido?"
+    result = agent_executor.invoke({"input": query})
+    logger.info("Query: %s", query)
+    logger.info("Result: %s", result)
