@@ -23,8 +23,21 @@ with engine.connect() as conn:
     tables = [row[0] for row in result]
     print("Tables:", tables)
     
-    # Test query on Prj_Data_Transfers_SC
-    if 'Prj_Data_Transfers_SC' in tables:
-        result = conn.execute(text("SELECT COUNT(*) FROM Prj_Data_Transfers_SC WHERE Recibido = 'Y'"))
-        count = result.scalar()
-        print("Count:", count)
+    # Show schema for Prj_Data_Transfers_SC
+    result = conn.execute(text("""
+        SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'Prj_Data_Transfers_SC'
+        ORDER BY ORDINAL_POSITION
+    """))
+    print("\nColumns in Prj_Data_Transfers_SC:")
+    for row in result:
+        print(f"- {row[0]} ({row[1]})")
+    
+    # Show sample data
+    result = conn.execute(text("SELECT TOP 1 * FROM Prj_Data_Transfers_SC"))
+    row = result.fetchone()
+    if row:
+        print("\nSample row:")
+        for col, val in zip(result.keys(), row):
+            print(f"{col}: {val}")
