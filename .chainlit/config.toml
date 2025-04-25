@@ -35,13 +35,14 @@ multi_modal = true
 
 [UI]
 # Name of the app and chatbot.
-name = "Chatbot"
-
+name = "SQL Chatbot"
+logo = "logo.jpg"
 # Show the readme while the conversation is empty.
-show_readme_as_default = true
+show_readme_as_default = false
+show_readme = false
 
 # Description of the app and chatbot. This is used for HTML tags.
-# description = ""
+description = "Ask questions about your SQL database in natural language"
 
 # Large size content are by default collapsed for a cleaner ui
 default_collapse_content = true
@@ -61,23 +62,23 @@ hide_cot = false
 
 # Override default MUI light theme. (Check theme.ts)
 [UI.theme.light]
-    #background = "#FAFAFA"
-    #paper = "#FFFFFF"
+    background = "#FAFAFA"
+    paper = "#FFFFFF"
 
     [UI.theme.light.primary]
-        #main = "#F80061"
-        #dark = "#980039"
-        #light = "#FFE7EB"
+        main = "#007AFF"
+        dark = "#0056B3"
+        light = "#E5F1FF"
 
 # Override default MUI dark theme. (Check theme.ts)
 [UI.theme.dark]
-    #background = "#FAFAFA"
-    #paper = "#FFFFFF"
+    background = "#1A1A1A"
+    paper = "#2D2D2D"
 
     [UI.theme.dark.primary]
-        #main = "#F80061"
-        #dark = "#980039"
-        #light = "#FFE7EB"
+        main = "#007AFF"
+        dark = "#0056B3"
+        light = "#E5F1FF"
 
 
 [meta]

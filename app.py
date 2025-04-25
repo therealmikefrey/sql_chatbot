@@ -4,10 +4,14 @@ from httpx import TimeoutException, ConnectError
 
 API_URL = "http://localhost:8000"  # FastAPI server URL
 
-# Configure longer timeouts
-CONNECT_TIMEOUT = 30.0  # 30 seconds for initial connection
-READ_TIMEOUT = 300.0    # 5 minutes for reading response
-TIMEOUTS = httpx.Timeout(connect=CONNECT_TIMEOUT, read=READ_TIMEOUT)
+# Configure timeouts
+TIMEOUTS = httpx.Timeout(
+    timeout=300.0,  # Default timeout for all operations
+    connect=30.0,   # Connection timeout
+    read=300.0,     # Read timeout
+    write=60.0,     # Write timeout
+    pool=None       # Pool timeout (None means no pool timeout)
+)
 
 # Initialize chatbot at startup, not module level
 chatbot = None
